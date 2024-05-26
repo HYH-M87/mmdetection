@@ -22,9 +22,9 @@ class VOCDataset(XMLDataset):
     # }
     METAINFO = {
         'classes':
-        ('MA',),
+        ('MA','Background',),
         # palette is a list of color tuples, which is used for visualization.
-        'palette': [(106, 0, 228)]
+        'palette': [(106, 0, 228), (183, 130, 88)]
     }
 
     def __init__(self, **kwargs):
