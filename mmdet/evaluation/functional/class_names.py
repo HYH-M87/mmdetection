@@ -17,7 +17,7 @@ def wider_face_classes() -> list:
 def voc_classes() -> list:
     """Class names of PASCAL VOC."""
     return [
-        'MA'
+        'MA','Background'
     ]
 
 
