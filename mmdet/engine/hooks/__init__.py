@@ -11,11 +11,13 @@ from .visualization_hook import (DetVisualizationHook,
                                  GroundingVisualizationHook,
                                  TrackVisualizationHook)
 from .yolox_mode_switch_hook import YOLOXModeSwitchHook
+from .unfreeze_backbone_epoch_based_hook import UnfreezeBackboneEpochBasedHook
+from .custom_lr_hook import CustomLrSchedulerHook
 
 __all__ = [
     'YOLOXModeSwitchHook', 'SyncNormHook', 'CheckInvalidLossHook',
     'SetEpochInfoHook', 'MemoryProfilerHook', 'DetVisualizationHook',
     'NumClassCheckHook', 'MeanTeacherHook', 'trigger_visualization_hook',
     'PipelineSwitchHook', 'TrackVisualizationHook',
-    'GroundingVisualizationHook'
+    'GroundingVisualizationHook', 'UnfreezeBackboneEpochBasedHook','CustomLrSchedulerHook'
 ]
