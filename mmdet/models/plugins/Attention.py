@@ -87,8 +87,8 @@ class DDA(nn.Module):
         x_fft = torch.fft.fftshift(x_fft)
         magnitude_spectrum = torch.abs(x_fft)
         phase_spectrum = torch.angle(x_fft)
-        # merge = self.chanel_insert(magnitude_spectrum, phase_spectrum)
-        merge = torch.cat((phase_spectrum, magnitude_spectrum), dim=1)
+        merge = self.chanel_insert(magnitude_spectrum, phase_spectrum)
+        # merge = torch.cat((phase_spectrum, magnitude_spectrum), dim=1)
         return merge
     
     def chanel_insert(self, A, B) -> torch.Tensor:
@@ -104,12 +104,12 @@ class DDA(nn.Module):
         return merged_tensor
     
     def forward(self, x):
-        identity = x
+        # identity = x
         x_space = self.space_cbam(x)
         x_fft = self.frequency_cbam(self.fusion1(self.whole_fft(x)))
         x = torch.cat((x_space, x_fft), dim=1)
         x = self.fusion2(x)
-        x += identity
+        # x += identity
         return x
         
     
