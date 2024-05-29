@@ -19,11 +19,13 @@ from .swin import SwinTransformer
 from .trident_resnet import TridentResNet
 from .resnext_cbam import CBAMResNeXt
 from .resnext_star import StarResNeXt
+from .resnext_dda import DDAResNeXt
 
 __all__ = [
     'RegNet', 'ResNet', 'ResNetV1d', 'ResNeXt', 'SSDVGG', 'HRNet',
     'MobileNetV2', 'Res2Net', 'HourglassNet', 'DetectoRS_ResNet',
     'DetectoRS_ResNeXt', 'Darknet', 'ResNeSt', 'TridentResNet', 'CSPDarknet',
     'SwinTransformer', 'PyramidVisionTransformer',
-    'PyramidVisionTransformerV2', 'EfficientNet', 'CSPNeXt','CBAMResNeXt','StarResNeXt'
+    'PyramidVisionTransformerV2', 'EfficientNet', 'CSPNeXt','CBAMResNeXt','StarResNeXt',
+    'DDAResNeXt'
 ]

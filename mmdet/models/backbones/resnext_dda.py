@@ -4,74 +4,15 @@ import math
 from mmcv.cnn import build_conv_layer, build_norm_layer
 import torch.utils.checkpoint as cp
 import torch
-import torch.nn as nn
 
 from mmdet.registry import MODELS
 from ..layers import ResLayer
 from .resnet import Bottleneck as _Bottleneck
 from .resnet import ResNet
-
-class ChannelAttention(nn.Module):
-    def __init__(self, in_channels, reduction=16):
-        super(ChannelAttention, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.max_pool = nn.AdaptiveMaxPool2d(1)
-        
-        self.fc1 = nn.Conv2d(in_channels, in_channels // reduction, 1, bias=False)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Conv2d(in_channels // reduction, in_channels, 1, bias=False)
-        self.sigmoid = nn.Sigmoid()
-        
-    def forward(self, x):
-        avg_out = self.fc2(self.relu(self.fc1(self.avg_pool(x))))
-        max_out = self.fc2(self.relu(self.fc1(self.max_pool(x))))
-        out = avg_out + max_out
-        return self.sigmoid(out)
-
-class SpatialAttention(nn.Module):
-    def __init__(self, kernel_size=7):
-        super(SpatialAttention, self).__init__()
-        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=(kernel_size - 1) // 2, bias=False)
-        self.sigmoid = nn.Sigmoid()
-        
-    def forward(self, x):
-        avg_out = torch.mean(x, dim=1, keepdim=True)
-        max_out, _ = torch.max(x, dim=1, keepdim=True)
-        x = torch.cat([avg_out, max_out], dim=1)
-        x = self.conv1(x)
-        return self.sigmoid(x)
-
-class CBAM(nn.Module):
-    def __init__(self, in_channels, reduction=16, kernel_size=7):
-        super(CBAM, self).__init__()
-        self.channel_attention = ChannelAttention(in_channels, reduction)
-        self.spatial_attention = SpatialAttention(kernel_size)
-        
-    def forward(self, x):
-        x = x * self.channel_attention(x)
-        x = x * self.spatial_attention(x)
-        return x
+from ..plugins import DDA
+from ..plugins import CBAM
 
 
-# class StarBlock(nn.Module):
-    
-#     def __init__(self, inplanes, outplanes, mlp_ratio=3, stride=1) -> None:
-#         super().__init__()
-#         self.conv1 = ConvBn(inplanes, inplanes, 7, 1, 3)
-#         self.f1 = ConvBn(inplanes, inplanes*mlp_ratio, 1, with_bn=False)
-#         self.f2 = ConvBn(inplanes, inplanes*mlp_ratio, 1, with_bn=False)
-#         self.g = ConvBn(mlp_ratio * inplanes, inplanes, 1, with_bn=True)
-#         self.conv2 = ConvBn(inplanes, outplanes, 7, stride, 3, with_bn=False)
-#         self.act = nn.ReLU6()
-    
-#     def forward(self, x):
-#         input = x
-#         x = self.conv1(x)
-#         x1, x2 = self.f1(x), self.f2(x)
-#         x = self.act(x1) * x2
-#         x = self.conv2(self.g(x))
-#         return x
-        
 class CBAMBottleneck(_Bottleneck):
     expansion = 4
 
@@ -153,7 +94,6 @@ class CBAMBottleneck(_Bottleneck):
             bias=False)
         self.add_module(self.norm3_name, norm3)
         
-        self.cbam = CBAM(self.planes * self.expansion)
 
         if self.with_plugins:
             self._del_block_plugins(self.after_conv1_plugin_names +
@@ -205,7 +145,6 @@ class CBAMBottleneck(_Bottleneck):
             if self.downsample is not None:
                 identity = self.downsample(x)
             
-            out = self.cbam(out)
             out += identity
             
             return out
@@ -221,7 +160,7 @@ class CBAMBottleneck(_Bottleneck):
 
 
 @MODELS.register_module()
-class CBAMResNeXt(ResNet):
+class DDAResNeXt(ResNet):
     """ResNeXt backbone.
 
     Args:
@@ -254,11 +193,19 @@ class CBAMResNeXt(ResNet):
         152: (CBAMBottleneck, (3, 8, 36, 3))
     }
 
-    def __init__(self, groups=1, base_width=4, **kwargs):
+    def __init__(self, groups=1, base_width=4,**kwargs):
         self.deep_stem = True
         self.groups = groups
         self.base_width = base_width
-        super(CBAMResNeXt, self).__init__(**kwargs)
+        super(DDAResNeXt, self).__init__(**kwargs)
+        self.dda0 = DDA(64,8,16)
+        self.dda1 = DDA(256,8,16)
+        self.dda2 = DDA(512,8,16)
+        self.dda3 = DDA(1024,8,16)
+        # self.dda4 = DDA(2048,8,16)
+        
+        self.ddas = [self.dda1 ,self.dda2, self.dda3]
+        
 
     def make_res_layer(self, **kwargs):
         """Pack all blocks in a stage into a ``ResLayer``"""
@@ -267,7 +214,11 @@ class CBAMResNeXt(ResNet):
             base_width=self.base_width,
             base_channels=self.base_channels,
             **kwargs)
+        
     def forward(self, x):
+        """Add Frequenct domain feature"""
+        
+        
         """Forward function."""
         if self.deep_stem:
             x = self.stem(x)
@@ -275,11 +226,16 @@ class CBAMResNeXt(ResNet):
             x = self.conv1(x)
             x = self.norm1(x)
             x = self.relu(x)
+        x = self.dda0(x)
         x = self.maxpool(x)
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)
             x = res_layer(x)
+            if i<3:
+                x = self.ddas[i](x)+x
             if i in self.out_indices:
                 outs.append(x)
         return tuple(outs)
+
+

@@ -452,9 +452,9 @@ class ResNet(BaseModule):
         self.plugins = plugins
         self.block, stage_blocks = self.arch_settings[depth]
         self.stage_blocks = stage_blocks[:num_stages]
-        self.inplanes = stem_channels
+        self.inplanes = stem_channels # 64
 
-        self._make_stem_layer(in_channels, stem_channels)
+        self._make_stem_layer(in_channels, stem_channels) # 3->64
 
         self.res_layers = []
         for i, num_blocks in enumerate(self.stage_blocks):
