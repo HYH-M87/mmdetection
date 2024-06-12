@@ -10,6 +10,8 @@ from mmdet.registry import MODELS
 from ..layers import ResLayer
 from .resnet import Bottleneck as _Bottleneck
 from .resnet import ResNet
+from ..plugins import FrequencyProcess
+from ..plugins import CBAM
 
 class ChannelAttention(nn.Module):
     def __init__(self, in_channels, reduction=16):
@@ -57,13 +59,13 @@ class ConvBn(nn.Sequential):
         super().__init__()
         self.add_module('conv',nn.Conv2d(inplanes, outplanes, kernel_size, stride, padding, dilation, groups))
         if with_bn:
-            self.add_module('bn',nn.BatchNorm2d(outplanes))
+            self.add_module('bn',nn.GroupNorm(num_groups=32,num_channels=outplanes))
             nn.init.constant_(self.bn.weight,1)
             nn.init.constant_(self.bn.bias,0)
     
 class StarBlock(nn.Module):
     
-    def __init__(self, inplanes, outplanes, mlp_ratio=2, stride=1) -> None:
+    def __init__(self, inplanes, outplanes, mlp_ratio=3, stride=1) -> None:
         super().__init__()
         self.f1 = ConvBn(inplanes, inplanes*mlp_ratio, 1, with_bn=False)
         self.f2 = ConvBn(inplanes, inplanes*mlp_ratio, 1, with_bn=False)
@@ -284,7 +286,9 @@ class StarResNeXt(ResNet):
     def __init__(self, groups=1, base_width=4, **kwargs):
         self.groups = groups
         self.base_width = base_width
-        super(StarResNeXt, self).__init__(**kwargs)
+        
+        super(StarResNeXt, self).__init__(in_channels=9,deep_stem=True,**kwargs)
+        self.frequency_domain = FrequencyProcess(grids=2)
 
     def make_res_layer(self, **kwargs):
         """Pack all blocks in a stage into a ``ResLayer``"""
@@ -293,4 +297,36 @@ class StarResNeXt(ResNet):
             base_width=self.base_width,
             base_channels=self.base_channels,
             **kwargs)
+    def _freeze_stages(self):
+        if self.frozen_stages >= 0:
+            if not self.deep_stem:
+                self.norm1.eval()
+                for m in [self.conv1, self.norm1]:
+                    for param in m.parameters():
+                        param.requires_grad = False
+
+        for i in range(1, self.frozen_stages + 1):
+            m = getattr(self, f'layer{i}')
+            m.eval()
+            for param in m.parameters():
+                param.requires_grad = False
     
+    def forward(self, x):
+        """Forward function."""
+        x_fft = self.frequency_domain.region_fft(x)
+        x = torch.cat((x,x_fft),dim=1)
+        
+        if self.deep_stem:
+            x = self.stem(x)
+        else:
+            x = self.conv1(x)
+            x = self.norm1(x)
+            x = self.relu(x)
+        x = self.maxpool(x)
+        outs = []
+        for i, layer_name in enumerate(self.res_layers):
+            res_layer = getattr(self, layer_name)
+            x = res_layer(x)
+            if i in self.out_indices:
+                outs.append(x)
+        return tuple(outs)

@@ -172,13 +172,13 @@ class FPN(BaseModule):
 
         # build laterals
         laterals = [
-            lateral_conv(inputs[i + self.start_level])
+            lateral_conv(inputs[i + self.start_level])   # lateral_conv 是1*1卷积 inchanels -> outchanels
             for i, lateral_conv in enumerate(self.lateral_convs)
         ]
 
         # build top-down path
-        used_backbone_levels = len(laterals)
-        for i in range(used_backbone_levels - 1, 0, -1):
+        used_backbone_levels = len(laterals)  # used_backbone_levels = 4
+        for i in range(used_backbone_levels - 1, 0, -1): # 3 -> 0 对低分辨率进行上采样
             # In some cases, fixing `scale factor` (e.g. 2) is preferred, but
             #  it cannot co-exist with `size` in `F.interpolate`.
             if 'scale_factor' in self.upsample_cfg:
@@ -193,7 +193,7 @@ class FPN(BaseModule):
         # build outputs
         # part 1: from original levels
         outs = [
-            self.fpn_convs[i](laterals[i]) for i in range(used_backbone_levels)
+            self.fpn_convs[i](laterals[i]) for i in range(used_backbone_levels)   #fpn_convs 是3*3 size=3 的卷积 outchanels -> outchanels 
         ]
         # part 2: add extra levels
         if self.num_outs > len(outs):

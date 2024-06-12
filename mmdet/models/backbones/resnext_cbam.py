@@ -4,6 +4,7 @@ import math
 from mmcv.cnn import build_conv_layer, build_norm_layer
 import torch.utils.checkpoint as cp
 import torch
+import torch.fft
 import torch.nn as nn
 
 from mmdet.registry import MODELS
@@ -258,7 +259,7 @@ class CBAMResNeXt(ResNet):
         self.deep_stem = True
         self.groups = groups
         self.base_width = base_width
-        super(CBAMResNeXt, self).__init__(**kwargs)
+        super(CBAMResNeXt, self).__init__(deep_stem=True,**kwargs)
 
     def make_res_layer(self, **kwargs):
         """Pack all blocks in a stage into a ``ResLayer``"""
@@ -267,7 +268,8 @@ class CBAMResNeXt(ResNet):
             base_width=self.base_width,
             base_channels=self.base_channels,
             **kwargs)
-    def forward(self, x):
+    def forward(self, x):    
+        
         """Forward function."""
         if self.deep_stem:
             x = self.stem(x)
@@ -276,6 +278,140 @@ class CBAMResNeXt(ResNet):
             x = self.norm1(x)
             x = self.relu(x)
         x = self.maxpool(x)
+        outs = []
+        for i, layer_name in enumerate(self.res_layers):
+            res_layer = getattr(self, layer_name)
+            x = res_layer(x)
+            if i in self.out_indices:
+                outs.append(x)
+        return tuple(outs)
+
+@MODELS.register_module()
+class FCBAMResNeXt(ResNet):
+    """ResNeXt backbone.
+
+    Args:
+        depth (int): Depth of resnet, from {18, 34, 50, 101, 152}.
+        in_channels (int): Number of input image channels. Default: 3.
+        num_stages (int): Resnet stages. Default: 4.
+        groups (int): Group of resnext.
+        base_width (int): Base width of resnext.
+        strides (Sequence[int]): Strides of the first block of each stage.
+        dilations (Sequence[int]): Dilation of each stage.
+        out_indices (Sequence[int]): Output from which stages.
+        style (str): `pytorch` or `caffe`. If set to "pytorch", the stride-two
+            layer is the 3x3 conv layer, otherwise the stride-two layer is
+            the first 1x1 conv layer.
+        frozen_stages (int): Stages to be frozen (all param fixed). -1 means
+            not freezing any parameters.
+        norm_cfg (dict): dictionary to construct and config norm layer.
+        norm_eval (bool): Whether to set norm layers to eval mode, namely,
+            freeze running stats (mean and var). Note: Effect on Batch Norm
+            and its variants only.
+        with_cp (bool): Use checkpoint or not. Using checkpoint will save some
+            memory while slowing down the training speed.
+        zero_init_residual (bool): whether to use zero init for last norm layer
+            in resblocks to let them behave as identity.
+    """
+
+    arch_settings = {
+        50: (CBAMBottleneck, (3, 4, 6, 3)),
+        101: (CBAMBottleneck, (3, 4, 23, 3)),
+        152: (CBAMBottleneck, (3, 8, 36, 3))
+    }
+
+    def __init__(self, groups=1, base_width=4, **kwargs):
+        self.deep_stem = True
+        self.groups = groups
+        self.base_width = base_width
+        super(FCBAMResNeXt, self).__init__(in_channels=3,deep_stem=False,**kwargs)
+        
+        self.fusion = nn.Conv2d(6,3,1)
+        nn.init.kaiming_uniform_(self.fusion.weight, nonlinearity='relu')
+        self.gn = nn.GroupNorm(1,3)
+        nn.init.constant_(self.gn.weight, 1.0)  # 将权重初始化为1
+        nn.init.constant_(self.gn.bias, 0.0)    # 将偏置初始化为0
+        self.relu = nn.ReLU()
+
+    def make_res_layer(self, **kwargs):
+        """Pack all blocks in a stage into a ``ResLayer``"""
+        return ResLayer(
+            groups=self.groups,
+            base_width=self.base_width,
+            base_channels=self.base_channels,
+            **kwargs)
+    
+    def high_pass_filter(self, tensor):
+        b, c, h, w = tensor.shape
+        fft = torch.fft.fft2(tensor, dim=(-2, -1))
+        fft_shift = torch.fft.fftshift(fft, dim=(-2, -1))
+
+        # Create high pass mask
+        mask = torch.ones(h, w, dtype=torch.bool, device=tensor.device)
+        ch = h//2
+        cw = w//2
+        mask[int(ch*0.05):int(ch*1.95), int(cw*0.05):int(cw*1.95)] = 0
+        fft_shift *= mask
+
+        fft_ishift = torch.fft.ifftshift(fft_shift, dim=(-2, -1))
+        filtered = torch.fft.ifft2(fft_ishift, dim=(-2, -1))
+        magnitude = torch.sqrt(filtered.real**2 + filtered.imag**2)
+
+        # Normalize to range [0, 1]
+        magnitude = magnitude - magnitude.amin(dim=(-2, -1), keepdim=True)
+        magnitude = (magnitude / magnitude.amax(dim=(-2, -1), keepdim=True))
+        return magnitude
+
+    def low_pass_filter(self, fft):
+        device=fft.device
+        b, c, h, w = fft.shape
+        fft = torch.fft.fft2(fft, dim=(-2, -1))
+        fft = torch.fft.fftshift(fft, dim=(-2, -1))
+
+        # Create low pass mask
+        mask = torch.zeros(h, w, dtype=torch.bool, device=device)
+        ch = h//2
+        cw = w//2
+        mask[int(ch*0.95):int(ch*1.05), int(cw*0.95):int(cw*1.05)] = 1
+        fft *= mask
+
+        fft = torch.fft.ifftshift(fft, dim=(-2, -1))
+        fft = torch.fft.ifft2(fft, dim=(-2, -1))
+        magnitude = torch.sqrt(fft.real**2 + fft.imag**2)
+
+        # Normalize to range [0, 1]
+        magnitude = magnitude - magnitude.amin(dim=(-2, -1), keepdim=True)
+        magnitude = (magnitude / magnitude.amax(dim=(-2, -1), keepdim=True))
+        return magnitude
+
+    def apply_filters(self, tensor):
+        # high_pass_filtered = self.high_pass_filter(tensor)
+        low_pass_filtered = self.low_pass_filter(tensor)
+
+        # Concatenate along the channel dimension
+        
+        return low_pass_filtered
+    
+    def forward(self, x):    
+        
+        # if torch.isnan(y).any() or torch.isinf(z).any():
+        #     print("Tensor contains illegal values (NaN or Inf).")
+        x = torch.cat((x,self.apply_filters(x)),dim=1)
+        x = self.relu(self.gn(self.fusion(x)))
+        """Forward function."""
+        if self.deep_stem:
+            x = self.stem(x)
+            # y = self.stem(y)
+            # z = self.stem(z)
+        else:
+            x = self.conv1(x)
+            x = self.norm1(x)
+            x = self.relu(x)
+
+            
+        
+        
+        
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)

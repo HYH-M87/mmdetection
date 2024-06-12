@@ -87,7 +87,7 @@ class ATSSHead(AnchorHead):
         self.relu = nn.ReLU(inplace=True)
         self.cls_convs = nn.ModuleList()
         self.reg_convs = nn.ModuleList()
-        for i in range(self.stacked_convs):
+        for i in range(self.stacked_convs):  # stacked_convs堆多少个卷积层 默认4
             chn = self.in_channels if i == 0 else self.feat_channels
             self.cls_convs.append(
                 ConvModule(
@@ -110,12 +110,12 @@ class ATSSHead(AnchorHead):
         pred_pad_size = self.pred_kernel_size // 2
         self.atss_cls = nn.Conv2d(
             self.feat_channels,
-            self.num_anchors * self.cls_out_channels,
+            self.num_anchors * self.cls_out_channels,   # top-k -> num_anchors ,输出 k*cls_out_channels(等于class num)
             self.pred_kernel_size,
             padding=pred_pad_size)
         self.atss_reg = nn.Conv2d(
             self.feat_channels,
-            self.num_base_priors * 4,
+            self.num_base_priors * 4,   # num_base_priors = 每层的anchor数
             self.pred_kernel_size,
             padding=pred_pad_size)
         self.atss_centerness = nn.Conv2d(

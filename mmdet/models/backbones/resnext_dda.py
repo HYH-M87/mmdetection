@@ -194,16 +194,17 @@ class DDAResNeXt(ResNet):
     }
 
     def __init__(self, groups=1, base_width=4,**kwargs):
-        self.deep_stem = True
+        
         self.groups = groups
         self.base_width = base_width
-        super(DDAResNeXt, self).__init__(**kwargs)
+        super(DDAResNeXt, self).__init__(in_channels=6, deep_stem = True, **kwargs)
+        self.dda_ = DDA(3,16,1)
         self.dda0 = DDA(64,8,16)
-        self.dda1 = DDA(256,8,16)
-        self.dda2 = DDA(512,8,16)
-        self.dda3 = DDA(1024,8,16)
+        self.dda1 = DDA(256,4,16)
+        self.dda2 = DDA(512,4,16)
+        self.dda3 = DDA(1024,2,16)
         # self.dda4 = DDA(2048,8,16)
-        
+        kwargs
         self.ddas = [self.dda1 ,self.dda2, self.dda3]
         
 
@@ -217,7 +218,7 @@ class DDAResNeXt(ResNet):
         
     def forward(self, x):
         """Add Frequenct domain feature"""
-        
+        x = torch.cat((x,self.dda_(x)),dim=1)
         
         """Forward function."""
         if self.deep_stem:
