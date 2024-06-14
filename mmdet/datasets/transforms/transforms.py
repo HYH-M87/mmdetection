@@ -37,7 +37,24 @@ except ImportError:
     Compose = None
 
 Number = Union[int, float]
+'''result
 
+keys_with_meanings = {
+    'img': '图像数据，通常是一个 `np.ndarray`',
+    'img_path': '图像文件路径或 `None`（在图像从数组加载时）',
+    'img_shape': '图像的形状，通常是一个包含高度和宽度的元组 `(H, W)`',
+    'ori_shape': '图像的原始形状，通常是一个包含高度和宽度的元组 `(H, W)`',
+    'gt_bboxes': '真值（Ground Truth）边界框，通常是一个形状为 `(N, 4)` 的数组，表示 N 个边界框的坐标 `(x1, y1, x2, y2)`',
+    'gt_bboxes_labels': '真值边界框的标签，通常是一个形状为 `(N,)` 的数组，表示每个边界框的类别标签',
+    'gt_masks': '真值（Ground Truth）掩码，可以是 `BitmapMasks` 或 `PolygonMasks`，表示实例或分割掩码',
+    'gt_seg_map': '语义分割真值掩码，通常是一个形状为 `(H, W)` 的数组',
+    'gt_ignore_flags': '忽略标志，通常是一个布尔数组，表示哪些边界框或掩码需要忽略',
+    'proposals': '提议（Proposals）边界框，通常是一个形状为 `(M, 4)` 的数组，表示 M 个提议边界框的坐标 `(x1, y1, x2, y2)`',
+    'proposals_scores': '提议边界框的分数，通常是一个形状为 `(M,)` 的数组，表示每个提议边界框的置信度分数',
+    'gt_instances_ids': '实例的 ID，通常是一个形状为 `(N,)` 的数组，表示每个实例的唯一标识符'
+}
+
+'''
 
 def _fixed_scale_size(
     size: Tuple[int, int],
@@ -3915,3 +3932,36 @@ class CachedMixUp(BaseTransform):
         repr_str += f'random_pop={self.random_pop}, '
         repr_str += f'prob={self.prob})'
         return repr_str
+@TRANSFORMS.register_module()
+class LowPassFilter(BaseTransform):
+    """
+    Required Keys:
+
+    - img
+
+    Modified Keys:
+
+    - img
+
+    Args:
+        hue_delta (int): delta of hue. Defaults to 5.
+        saturation_delta (int): delta of saturation. Defaults to 30.
+        value_delta (int): delat of value. Defaults to 30.
+    """
+
+    def __init__(self,
+                 hue_delta: int = 5,
+                 saturation_delta: int = 30,
+                 value_delta: int = 30,
+                 prob: int = 0.5
+                 ) -> None:
+        pass
+
+    @cache_randomness
+    def _get_hsv_gains(self):
+        pass
+
+    def transform(self, results: dict) -> dict:
+        
+
+        pass
