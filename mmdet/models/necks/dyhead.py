@@ -99,7 +99,7 @@ class DyHeadBlock(nn.Module):
         '''
             对于输入的X 为4Dtensor 假设有五个特征层 Fi i=0,1,2,3,4
             那么对于0和4 只需经过spatial_conv_mid(特征图不变) + scale_attn_module + task_attn_module 也即不经过其中的if判断
-            对于 1,2,3 需要经过if判断中的特征提取, 其包括spatial_conv_low(会进行下采样) + scale_attn_module + spatial_conv_high(特征图不变) + scale_attn_module + up-sample + task_attn_module
+            对于 1,2,3 需要经过if判断中的多尺度特征提取, 其包括spatial_conv_low(对高分辨率进行下采样) + scale_attn_module + spatial_conv_high(对低分辨率特征图不变后续接上上采样) + scale_attn_module + up-sample + task_attn_module
             最后输出和输入维度一样
         '''
         outs = []

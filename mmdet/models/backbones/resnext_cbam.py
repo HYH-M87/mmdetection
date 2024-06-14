@@ -268,6 +268,56 @@ class CBAMResNeXt(ResNet):
             base_width=self.base_width,
             base_channels=self.base_channels,
             **kwargs)
+        
+    def _make_stem_layer(self, in_channels, stem_channels):
+        if self.deep_stem:
+            self.stem = nn.Sequential(
+                build_conv_layer(
+                    self.conv_cfg,
+                    in_channels,
+                    stem_channels // 2,
+                    kernel_size=3,
+                    stride=2,
+                    padding=1,
+                    bias=False),
+                build_norm_layer(self.norm_cfg, stem_channels // 2)[1],
+                nn.ReLU(inplace=True),
+                build_conv_layer(
+                    self.conv_cfg,
+                    stem_channels // 2,
+                    stem_channels // 2,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    bias=False),
+                build_norm_layer(self.norm_cfg, stem_channels // 2)[1],
+                nn.ReLU(inplace=True),
+                build_conv_layer(
+                    self.conv_cfg,
+                    stem_channels // 2,
+                    stem_channels,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    bias=False),
+                build_norm_layer(self.norm_cfg, stem_channels)[1],
+                nn.ReLU(inplace=True))
+        else:
+            self.conv1 = build_conv_layer(
+                self.conv_cfg,
+                in_channels,
+                stem_channels,
+                kernel_size=7,
+                stride=2,
+                padding=3,
+                bias=False)
+            self.norm1_name, norm1 = build_norm_layer(
+                self.norm_cfg, stem_channels, postfix=1)
+            self.add_module(self.norm1_name, norm1)
+            self.relu = nn.ReLU(inplace=True)
+            
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        
     def forward(self, x):    
         
         """Forward function."""
@@ -370,6 +420,7 @@ class FCBAMResNeXt(ResNet):
 
         # Create low pass mask
         mask = torch.zeros(h, w, dtype=torch.bool, device=device)
+        
         ch = h//2
         cw = w//2
         mask[int(ch*0.95):int(ch*1.05), int(cw*0.95):int(cw*1.05)] = 1
@@ -392,7 +443,7 @@ class FCBAMResNeXt(ResNet):
         
         return low_pass_filtered
     
-    def forward(self, x):    
+    def forward(self, x):
         
         # if torch.isnan(y).any() or torch.isinf(z).any():
         #     print("Tensor contains illegal values (NaN or Inf).")
@@ -407,11 +458,6 @@ class FCBAMResNeXt(ResNet):
             x = self.conv1(x)
             x = self.norm1(x)
             x = self.relu(x)
-
-            
-        
-        
-        
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)
