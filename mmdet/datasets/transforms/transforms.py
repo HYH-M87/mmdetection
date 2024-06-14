@@ -3950,18 +3950,35 @@ class LowPassFilter(BaseTransform):
     """
 
     def __init__(self,
-                 hue_delta: int = 5,
-                 saturation_delta: int = 30,
-                 value_delta: int = 30,
-                 prob: int = 0.5
+                 rad_k:int = 0.15
                  ) -> None:
+        self.rad_k = rad_k
+        self.row=0
+        self.col=0
         pass
 
     @cache_randomness
-    def _get_hsv_gains(self):
+    def _get_lpf(self, single_, mask):
+        dft = cv2.dft(single_, flags=cv2.DFT_COMPLEX_OUTPUT)
+        dft = np.fft.fftshift(dft)
+        dft = dft * mask
+        dft = np.fft.ifftshift(dft)
+        dft = cv2.idft(dft)
+        return np.uint8(cv2.normalize(cv2.magnitude(dft[:, :, 0], dft[:, :, 1]), None, 0, 255, cv2.NORM_MINMAX))
+
         pass
 
     def transform(self, results: dict) -> dict:
-        
+        img = results['img']
+        self.row, self.col, _ = img.shape
+        crow, ccol = self.row // 2, self.col // 2 
+        mask_low = np.zeros((self.row, self.col, 2), np.uint8)
+        cv2.circle(mask_low, (crow, ccol), int(self.row*self.rad_k), (1, 1), thickness=-1)
+        b,g,r = cv2.split(img)
+        b = self._get_lpf(b,mask_low)
+        g = self._get_lpf(g,mask_low)
+        r = self._get_lpf(r,mask_low)
+        img_new = cv2.merge([b,g,r])
+        results['img'] = img_new
 
-        pass
+        return results
