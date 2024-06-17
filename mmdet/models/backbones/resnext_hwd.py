@@ -8,7 +8,7 @@ from mmdet.registry import MODELS
 from ..layers import ResLayer
 from .resnet import Bottleneck as _Bottleneck
 from .resnet import ResNet
-from ..plugins import Down_wt
+# from ..plugins import Down_wt
 import torch.nn.functional as F
 
 
