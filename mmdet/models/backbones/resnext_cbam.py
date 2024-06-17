@@ -6,6 +6,7 @@ import torch.utils.checkpoint as cp
 import torch
 import torch.fft
 import torch.nn as nn
+import torchvision.ops as ops
 
 from mmdet.registry import MODELS
 from ..layers import ResLayer
@@ -53,25 +54,26 @@ class CBAM(nn.Module):
         x = x * self.spatial_attention(x)
         return x
 
+class DeformableConv2d(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True):
+        super(DeformableConv2d, self).__init__()
+        self.offset = nn.Conv2d(in_channels, 2 * kernel_size * kernel_size, kernel_size=kernel_size, stride=stride, padding=padding, bias=True)
+        self.deform_conv = ops.DeformConv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias)
+        self._initialize_weights()
 
-# class StarBlock(nn.Module):
+    def _initialize_weights(self):
+        nn.init.kaiming_normal_(self.offset.weight, mode='fan_out', nonlinearity='relu')
+        if self.offset.bias is not None:
+            nn.init.constant_(self.offset.bias, 0)
+        
+        nn.init.kaiming_normal_(self.deform_conv.weight, mode='fan_out', nonlinearity='relu')
+        if self.deform_conv.bias is not None:
+            nn.init.constant_(self.deform_conv.bias, 0)
     
-#     def __init__(self, inplanes, outplanes, mlp_ratio=3, stride=1) -> None:
-#         super().__init__()
-#         self.conv1 = ConvBn(inplanes, inplanes, 7, 1, 3)
-#         self.f1 = ConvBn(inplanes, inplanes*mlp_ratio, 1, with_bn=False)
-#         self.f2 = ConvBn(inplanes, inplanes*mlp_ratio, 1, with_bn=False)
-#         self.g = ConvBn(mlp_ratio * inplanes, inplanes, 1, with_bn=True)
-#         self.conv2 = ConvBn(inplanes, outplanes, 7, stride, 3, with_bn=False)
-#         self.act = nn.ReLU6()
-    
-#     def forward(self, x):
-#         input = x
-#         x = self.conv1(x)
-#         x1, x2 = self.f1(x), self.f2(x)
-#         x = self.act(x1) * x2
-#         x = self.conv2(self.g(x))
-#         return x
+    def forward(self, x):
+        offset = self.offset(x)
+        x = self.deform_conv(x, offset)
+        return x
         
 class CBAMBottleneck(_Bottleneck):
     expansion = 4
