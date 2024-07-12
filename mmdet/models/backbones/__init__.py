@@ -20,7 +20,7 @@ from .trident_resnet import TridentResNet
 from .resnext_cbam import CBAMResNeXt
 from .resnext_star import StarResNeXt
 from .resnext_dda import DDAResNeXt
-from .resnext_hwd import HWDResNeXt
+# from .resnext_hwd import HWDResNeXt
 from .resnext_cbam_dcn import CBAMDCNResNeXt
 __all__ = [
     'RegNet', 'ResNet', 'ResNetV1d', 'ResNeXt', 'SSDVGG', 'HRNet',
@@ -28,5 +28,5 @@ __all__ = [
     'DetectoRS_ResNeXt', 'Darknet', 'ResNeSt', 'TridentResNet', 'CSPDarknet',
     'SwinTransformer', 'PyramidVisionTransformer',
     'PyramidVisionTransformerV2', 'EfficientNet', 'CSPNeXt','CBAMResNeXt','StarResNeXt',
-    'DDAResNeXt','HWDResNeXt', 'CBAMDCNResNeXt'
+    'DDAResNeXt', 'CBAMDCNResNeXt'
 ]
